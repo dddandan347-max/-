@@ -106,43 +106,51 @@ const App: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       // Templates
+      // 尝试获取数据
       const { data: dbTemplates, error: tError } = await supabase
         .from('templates')
         .select('*')
         .order('id', { ascending: false }); 
       
-      if (tError || !dbTemplates || dbTemplates.length === 0) {
-        if (tError) {
-          console.warn("Supabase connection failed:", (tError as any).message || tError);
-          setConnectionError(true);
-          setErrorMessage((tError as any).message || String(tError));
-        } else {
-          console.log("Database is empty. Showing demo data.");
-          setConnectionError(false); // It's not an error, just empty
-        }
+      if (tError) {
+        // --- 真正的连接错误 ---
+        console.warn("Supabase connection failed:", (tError as any).message || tError);
+        setConnectionError(true);
+        // 获取错误详情，方便排查
+        const msg = (tError as any).message || String(tError);
+        setErrorMessage(msg);
+        
+        // 只有报错时才降级到静态数据
         setTemplates(TEMPLATES); 
         setDataSource('STATIC');
       } else {
-        console.log("Supabase Data Loaded:", dbTemplates.length, "items");
+        // --- 连接成功 ---
         setConnectionError(false);
         setErrorMessage('');
-        setTemplates(dbTemplates.map(mapTemplateFromDB));
         setDataSource('DB');
+
+        if (!dbTemplates || dbTemplates.length === 0) {
+          console.log("Database connected but empty.");
+          // 数据库为空时，显示空列表，而不是演示数据
+          setTemplates([]); 
+        } else {
+          console.log("Supabase Data Loaded:", dbTemplates.length, "items");
+          setTemplates(dbTemplates.map(mapTemplateFromDB));
+        }
       }
 
       // Settings
-      // Only try to fetch settings if templates didn't error out hard, or even if they did, try anyway
       const { data: settings, error: sError } = await supabase.from('settings').select('*');
       if (!sError && settings) {
-        const settingsArray = settings as any[];
-        const wx = settingsArray.find((s: any) => s.key === 'wechat_id');
-        const url = settingsArray.find((s: any) => s.key === 'learning_url');
+        const settingsArray = settings as { key: string; value: any }[];
+        const wx = settingsArray.find((s) => s.key === 'wechat_id');
+        const url = settingsArray.find((s) => s.key === 'learning_url');
         if (wx) setWechatId(String(wx.value));
         if (url) setLearningUrl(String(url.value));
 
         // Load Dynamic Content
         const getContent = (key: string) => {
-             const found = settingsArray.find((s: any) => s.key === key);
+             const found = settingsArray.find((s) => s.key === key);
              return found ? String(found.value) : '';
         };
         
@@ -286,8 +294,9 @@ const App: React.FC = () => {
   const renderNavItems = (mobile = false) => (
     <>
       {connectionError && (
-        <span className="text-[10px] bg-red-500/20 text-red-500 px-2 py-1 rounded border border-red-500/30 font-mono w-fit animate-pulse" title="Supabase 项目无法连接">
-            ⚠ DB Error
+        <span className="text-[10px] bg-red-500/20 text-red-500 px-2 py-1 rounded border border-red-500/30 font-mono w-fit animate-pulse flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            连接失败
         </span>
       )}
       {!connectionError && dataSource === 'STATIC' && (
@@ -298,7 +307,7 @@ const App: React.FC = () => {
       {dataSource === 'DB' && (
         <span className="text-[10px] bg-green-500/20 text-green-600 px-2 py-1 rounded border border-green-500/30 font-mono flex items-center gap-1 w-fit">
           <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-          {t.app.liveDb}
+          已连接数据库
         </span>
       )}
 
@@ -383,8 +392,19 @@ const App: React.FC = () => {
 
       {/* Error Banner for Connection Issues */}
       {connectionError && (
-        <div className="bg-red-600 text-white text-xs text-center py-2 font-bold tracking-wider animate-pulse px-4">
-           ⚠ DB ERROR: {errorMessage.toUpperCase() || 'UNKNOWN CONNECTION ERROR'}. USING DEMO DATA.
+        <div className="bg-red-900/80 border-b border-red-500/50 text-white text-sm text-center py-4 font-bold tracking-wider animate-pulse px-4 backdrop-blur-sm">
+           <div className="max-w-4xl mx-auto flex flex-col items-center gap-2">
+             <div className="flex items-center gap-2 text-red-200">
+               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+               <span>数据库连接失败 (CONNECTION FAILED)</span>
+             </div>
+             <div className="bg-black/50 px-4 py-2 rounded font-mono text-xs text-red-300 border border-red-500/30">
+               错误详情: {errorMessage || 'Unknown Error'}
+             </div>
+             <div className="text-xs text-red-200/70 mt-1">
+               提示: 如果显示 "relation does not exist"，请在 Supabase 后台 SQL Editor 运行建表代码。
+             </div>
+           </div>
         </div>
       )}
 
@@ -472,7 +492,7 @@ const App: React.FC = () => {
                   <h3 className="text-xl font-bold text-anime-text mb-2">{t.app.noTemplatesTitle}</h3>
                   <p className="text-anime-text-muted">
                     {dataSource === 'DB' 
-                      ? t.app.noTemplatesDescDb 
+                      ? "数据库为空 (No Data)。请进入后台管理添加模版。" 
                       : t.app.noTemplatesDescStatic}
                   </p>
                   <button 
