@@ -1,43 +1,35 @@
 import { createClient } from '@supabase/supabase-js';
 import { VideoTemplate } from '../types';
 
-// Safe environment variable access
-const getEnv = (key: string) => {
-  try {
-    return process.env[key];
-  } catch (e) {
-    return undefined;
+// ==========================================
+// 🔴 配置已自动更新
+// ==========================================
+
+// 您的 Supabase 项目 URL (从您的 Key 中解析得出)
+const SUPABASE_URL = 'https://jzjhnnqopldqwauuhttm.supabase.co';
+
+// 您的 Supabase Anon Key
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6amhubnFvcGxkcXdhdXVodHRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0MDYwNzUsImV4cCI6MjA4Mzk4MjA3NX0.NvMm8QMCKJP0RoF0FYbQERCs8q8X6-jUjMdJcOIQ3e4';
+
+// ==========================================
+
+// 检查配置是否已填写
+export const isConfigured = 
+  SUPABASE_URL.startsWith('https://') && 
+  !SUPABASE_URL.includes('请在这里填入') &&
+  SUPABASE_KEY.startsWith('ey');
+
+// 创建客户端
+export const supabase = createClient(
+  isConfigured ? SUPABASE_URL : 'https://placeholder.supabase.co', 
+  isConfigured ? SUPABASE_KEY : 'placeholder',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    },
   }
-};
-
-const envUrl = getEnv('SUPABASE_URL');
-const envKey = getEnv('SUPABASE_ANON_KEY');
-
-// 使用用户提供的真实 Supabase 配置 (Project Ref: ubtmcellazkddqquesus)
-const rawUrl = (envUrl || 'https://ubtmcellazkddqquesus.supabase.co').trim();
-
-// 更新为正确的 JWT Anon Key
-const rawKey = (envKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVidG1jZWxsYXprZGRxa3Vlc3VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzOTk0MTIsImV4cCI6MjA4Mzk3NTQxMn0.4NIh-cWteOaPj07BXCM0-VY-kAjMyMiBSgCRMVec1nQ').trim();
-
-// 检查 URL 是否有效
-const isValidUrl = (url: string) => {
-  try {
-    if (!url) return false;
-    new URL(url);
-    return true;
-  } catch (e) {
-    return false;
-  }
-};
-
-const supabaseUrl = isValidUrl(rawUrl) ? rawUrl : 'https://example.supabase.co';
-const supabaseKey = rawKey;
-
-if (!isValidUrl(rawUrl)) {
-  console.warn('⚠️ 检测到 Supabase URL 为无效占位符。应用将运行在演示模式。');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
+);
 
 // --- 数据转换工具 ---
 

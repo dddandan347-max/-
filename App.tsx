@@ -7,7 +7,7 @@ import { StickyFooter } from './components/StickyFooter';
 import { ChatWidget } from './components/ChatWidget';
 import { SEO } from './components/SEO';
 import { Loading } from './components/Loading'; 
-import { supabase, mapTemplateFromDB, mapTemplateToDB } from './services/supabaseClient';
+import { supabase, isConfigured, mapTemplateFromDB, mapTemplateToDB } from './services/supabaseClient';
 import { useLanguage } from './LanguageContext';
 
 // Handle Named Exports for Lazy Loading
@@ -47,6 +47,27 @@ const THEME_CONFIG = {
 
 const App: React.FC = () => {
   const { t, language, setLanguage } = useLanguage();
+  
+  // --- Check Configuration First ---
+  if (!isConfigured) {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-8 text-center font-sans">
+        <div className="max-w-2xl border-2 border-red-500 rounded-xl p-8 bg-red-900/10">
+          <h1 className="text-3xl font-black mb-6 text-red-500">需要配置连接信息 / Setup Required</h1>
+          <p className="mb-4 text-lg">您已重新部署，请先将 Supabase 的 URL 和 Key 填入代码。</p>
+          <div className="bg-black/50 p-4 rounded text-left font-mono text-sm text-slate-300 mb-6 border border-white/10">
+            1. 打开文件: <span className="text-yellow-400">services/supabaseClient.ts</span><br/>
+            2. 找到 <span className="text-cyan-400">SUPABASE_URL</span> 和 <span className="text-cyan-400">SUPABASE_KEY</span><br/>
+            3. 将 Supabase 后台 (Project Settings -> API) 的信息填入
+          </div>
+          <button onClick={() => window.location.reload()} className="bg-white text-black px-6 py-2 rounded font-bold hover:bg-slate-200">
+            填好后点击刷新
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const [activeSection, setActiveSection] = useState<AppSection>(AppSection.HOME);
   const [selectedTemplate, setSelectedTemplate] = useState<VideoTemplate | null>(null);
   
