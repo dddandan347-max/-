@@ -1,6 +1,6 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * Sends a chat message to Gemini and returns the response.
@@ -15,7 +15,7 @@ export const sendChatMessage = async (message: string, history: {role: string, p
       }
     });
 
-    const result = await chat.sendMessage({
+    const result: GenerateContentResponse = await chat.sendMessage({
       message: message
     });
 
@@ -35,7 +35,7 @@ export const analyzeImage = async (base64Image: string, prompt: string): Promise
     const base64Data = base64Image.split(',')[1] || base64Image;
     const mimeType = base64Image.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+).*,.*/)?.[1] || 'image/jpeg';
 
-    const response = await ai.models.generateContent({
+    const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: {
         parts: [

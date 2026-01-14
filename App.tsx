@@ -252,8 +252,12 @@ const App: React.FC = () => {
   };
   
   const handleUpdateSetting = async (key: string, value: string) => {
+     // Explicitly cast the object to any to bypass potential schema mismatch issues
      const { error } = await supabase.from('settings').upsert({ key, value } as any);
-     if (error) console.error(`Setting ${key} failed`, error as any);
+     if (error) {
+       // Safely handle error for logging
+       console.error(`Setting ${key} failed`, (error as any)?.message || error);
+     }
   };
 
   const handleUpdateSiteContent = async (content: SiteContent) => {
