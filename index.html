@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>短短ai定制商店</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Noto Sans JP"', '"Segoe UI"', '"Microsoft YaHei"', 'sans-serif'],
+              mono: ['"Consolas"', 'monospace'],
+            },
+            colors: {
+              anime: {
+                dark: 'rgb(var(--color-bg) / <alpha-value>)',
+                card: 'rgb(var(--color-card) / <alpha-value>)',
+                primary: 'rgb(var(--color-primary) / <alpha-value>)',
+                secondary: 'rgb(var(--color-secondary) / <alpha-value>)',
+                accent: 'rgb(var(--color-accent) / <alpha-value>)',
+                text: 'rgb(var(--color-text) / <alpha-value>)',
+                'text-muted': 'rgb(var(--color-text-muted) / <alpha-value>)',
+                yellow: '#facc15', // Anime yellow for highlights
+              }
+            },
+            backgroundImage: {
+              'anime-grid': "linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)",
+              'dots': "radial-gradient(rgb(var(--color-text-muted) / 0.2) 1px, transparent 1px)",
+            },
+            backgroundSize: {
+              'grid-size': '40px 40px',
+              'dots-size': '20px 20px',
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.5s ease-out',
+              'float': 'float 6s ease-in-out infinite',
+              'pulse-glow': 'pulseGlow 2s infinite',
+              'slide-up': 'slideUp 0.5s ease-out',
+              'spin-slow': 'spin 12s linear infinite',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              slideUp: {
+                '0%': { transform: 'translateY(100%)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-15px)' },
+              },
+              pulseGlow: {
+                '0%, 100%': { filter: 'drop-shadow(0 0 5px rgb(var(--color-primary) / 0.5))' },
+                '50%': { filter: 'drop-shadow(0 0 15px rgb(var(--color-primary) / 0.8))' },
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      :root {
+        /* Default: Cyberpunk Black Premium */
+        --color-bg: 5 5 5;          /* #050505 */
+        --color-card: 24 24 27;     /* #18181b */
+        --color-primary: 255 0 128; /* #ff0080 (Neon Pink) */
+        --color-secondary: 0 240 255; /* #00f0ff (Cyan) */
+        --color-accent: 147 51 234;   /* Purple */
+        --color-text: 255 255 255;    /* White */
+        --color-text-muted: 148 163 184; /* Slate 400 */
+        
+        --bg-gradient-1: rgba(147, 51, 234, 0.15);
+        --bg-gradient-2: rgba(0, 240, 255, 0.1);
+        
+        --text-glow-primary: -1px 0 #ff0080;
+        --text-glow-secondary: -1px 0 #00f0ff;
+      }
+
+      body {
+        background-color: rgb(var(--color-bg));
+        background-image: 
+          radial-gradient(circle at 15% 50%, var(--bg-gradient-1), transparent 40%), 
+          radial-gradient(circle at 85% 30%, var(--bg-gradient-2), transparent 40%);
+        min-height: 100vh;
+        transition: background-color 0.5s ease, color 0.5s ease;
+      }
+      
+      /* Anime speed lines effect container */
+      .speed-lines {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 0;
+      }
+      
+      /* Glitch text effect utility */
+      .glitch-text {
+        position: relative;
+      }
+      .glitch-text::before,
+      .glitch-text::after {
+        content: attr(data-text);
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .glitch-text::before {
+        left: 2px;
+        text-shadow: var(--text-glow-primary);
+        clip: rect(24px, 550px, 90px, 0);
+        animation: glitch-anim-2 3s infinite linear alternate-reverse;
+      }
+      .glitch-text::after {
+        left: -2px;
+        text-shadow: var(--text-glow-secondary);
+        clip: rect(85px, 550px, 140px, 0);
+        animation: glitch-anim 2.5s infinite linear alternate-reverse;
+      }
+      @keyframes glitch-anim {
+        0% { clip: rect(14px, 9999px, 122px, 0); }
+        20% { clip: rect(82px, 9999px, 13px, 0); }
+        40% { clip: rect(10px, 9999px, 86px, 0); }
+        60% { clip: rect(66px, 9999px, 142px, 0); }
+        80% { clip: rect(100px, 9999px, 2px, 0); }
+        100% { clip: rect(53px, 9999px, 93px, 0); }
+      }
+      @keyframes glitch-anim-2 {
+        0% { clip: rect(105px, 9999px, 35px, 0); }
+        20% { clip: rect(21px, 9999px, 8px, 0); }
+        40% { clip: rect(66px, 9999px, 139px, 0); }
+        60% { clip: rect(93px, 9999px, 46px, 0); }
+        80% { clip: rect(19px, 9999px, 72px, 0); }
+        100% { clip: rect(122px, 9999px, 15px, 0); }
+      }
+      
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: rgb(var(--color-bg)); 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #334155; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgb(var(--color-primary)); 
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^18.2.0/",
+    "react": "https://esm.sh/react@^18.2.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
+    "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
+    "react-helmet-async": "https://esm.sh/react-helmet-async@^2.0.5?external=react,react-dom",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-anime-dark text-anime-text antialiased selection:bg-anime-primary selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
