@@ -58,7 +58,7 @@ const App: React.FC = () => {
           <div className="bg-black/50 p-4 rounded text-left font-mono text-sm text-slate-300 mb-6 border border-white/10">
             1. 打开文件: <span className="text-yellow-400">services/supabaseClient.ts</span><br/>
             2. 找到 <span className="text-cyan-400">SUPABASE_URL</span> 和 <span className="text-cyan-400">SUPABASE_KEY</span><br/>
-            3. 将 Supabase 后台 (Project Settings -> API) 的信息填入
+            3. 将 Supabase 后台 (Project Settings -&gt; API) 的信息填入
           </div>
           <button onClick={() => window.location.reload()} className="bg-white text-black px-6 py-2 rounded font-bold hover:bg-slate-200">
             填好后点击刷新
@@ -134,14 +134,15 @@ const App: React.FC = () => {
       // Only try to fetch settings if templates didn't error out hard, or even if they did, try anyway
       const { data: settings, error: sError } = await supabase.from('settings').select('*');
       if (!sError && settings) {
-        const wx = settings.find(s => s.key === 'wechat_id');
-        const url = settings.find(s => s.key === 'learning_url');
+        const settingsArray = settings as any[];
+        const wx = settingsArray.find((s: any) => s.key === 'wechat_id');
+        const url = settingsArray.find((s: any) => s.key === 'learning_url');
         if (wx) setWechatId(String(wx.value));
         if (url) setLearningUrl(String(url.value));
 
         // Load Dynamic Content
         const getContent = (key: string) => {
-             const found = settings.find(s => s.key === key);
+             const found = settingsArray.find((s: any) => s.key === key);
              return found ? String(found.value) : '';
         };
         
@@ -212,7 +213,7 @@ const App: React.FC = () => {
 
   // Admin Handlers
   const handleAddTemplate = async (t: VideoTemplate) => {
-    const { error } = await supabase.from('templates').insert([mapTemplateToDB(t)]);
+    const { error } = await supabase.from('templates').insert([mapTemplateToDB(t)] as any);
     if (error) {
       const errMsg = (error as any)?.message || String(error);
       alert("添加失败: " + errMsg);
@@ -221,7 +222,7 @@ const App: React.FC = () => {
   };
 
   const handleUpdateTemplate = async (t: VideoTemplate) => {
-    const { error } = await supabase.from('templates').update(mapTemplateToDB(t)).eq('id', t.id);
+    const { error } = await supabase.from('templates').update(mapTemplateToDB(t) as any).eq('id', t.id);
     if (error) {
       const errMsg = (error as any)?.message || String(error);
       alert("更新失败: " + errMsg);
@@ -243,12 +244,12 @@ const App: React.FC = () => {
   };
   
   const handleUpdateSetting = async (key: string, value: string) => {
-     const { error } = await supabase.from('settings').upsert({ key, value });
-     if (error) console.error(`Setting ${key} failed`, error);
+     const { error } = await supabase.from('settings').upsert({ key, value } as any);
+     if (error) console.error(`Setting ${key} failed`, error as any);
   };
 
   const handleUpdateSiteContent = async (content: SiteContent) => {
-    const updates = [
+    const updates: { key: string; value: string }[] = [
       { key: 'brand_name_zh', value: content.brandName.zh },
       { key: 'brand_name_en', value: content.brandName.en },
       { key: 'hero_title_zh', value: content.heroTitle.zh },
@@ -257,7 +258,7 @@ const App: React.FC = () => {
       { key: 'hero_subtitle_en', value: content.heroSubtitle.en },
     ];
     for (const update of updates) {
-      await supabase.from('settings').upsert(update);
+      await supabase.from('settings').upsert(update as any);
     }
     setSiteContent(content);
   };

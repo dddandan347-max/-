@@ -2,10 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import { VideoTemplate } from '../types';
 
 // ==========================================
-// 🔴 配置已自动更新
+// 🔴 配置已自动更新 / Configuration Updated
 // ==========================================
 
-// 您的 Supabase 项目 URL (从您的 Key 中解析得出)
+// 您的 Supabase 项目 URL
 const SUPABASE_URL = 'https://jzjhnnqopldqwauuhttm.supabase.co';
 
 // 您的 Supabase Anon Key
