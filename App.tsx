@@ -19,25 +19,25 @@ type Theme = 'cyberpunk' | 'anime';
 const THEME_CONFIG = {
   cyberpunk: { // Cyberpunk Black Premium
     '--color-bg': '5 5 5',          
-    '--color-card': '24 24 27',     
+    '--color-card': '20 20 23', // Unified dark card
     '--color-primary': '255 0 128', 
     '--color-secondary': '0 240 255', 
     '--color-accent': '147 51 234',   
-    '--color-text': '255 255 255',
+    '--color-text': '248 250 252',
     '--color-text-muted': '148 163 184',
     '--bg-gradient-1': 'rgba(147, 51, 234, 0.15)',
     '--bg-gradient-2': 'rgba(0, 240, 255, 0.1)',
     '--text-glow-primary': '-1px 0 #ff0080',
     '--text-glow-secondary': '-1px 0 #00f0ff',
   },
-  anime: { // Anime Cute White
+  anime: { // Anime Cute White - Keeping consistent logic
     '--color-bg': '255 245 248',    
     '--color-card': '255 255 255',     
-    '--color-primary': '255 105 180', // Hot Pink
-    '--color-secondary': '56 189 248', // Sky Blue
+    '--color-primary': '255 105 180', 
+    '--color-secondary': '56 189 248', 
     '--color-accent': '244 114 182',     
-    '--color-text': '51 65 85',       // Slate 700
-    '--color-text-muted': '100 116 139', // Slate 500
+    '--color-text': '51 65 85',       
+    '--color-text-muted': '100 116 139', 
     '--bg-gradient-1': 'rgba(255, 105, 180, 0.05)',
     '--bg-gradient-2': 'rgba(56, 189, 248, 0.08)',
     '--text-glow-primary': '0 0 transparent',
@@ -70,76 +70,52 @@ const App: React.FC = () => {
 
   const [activeSection, setActiveSection] = useState<AppSection>(AppSection.HOME);
   const [selectedTemplate, setSelectedTemplate] = useState<VideoTemplate | null>(null);
-  
-  // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInitialMessage, setChatInitialMessage] = useState('');
-
-  // Search and Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTag, setActiveTag] = useState<string>('ALL');
-  
-  // Mobile Menu State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Theme State
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('visionary_theme') as Theme) || 'cyberpunk';
   });
-
-  // Data States
   const [templates, setTemplates] = useState<VideoTemplate[]>([]);
   const [wechatId, setWechatId] = useState(DEFAULT_WECHAT_ID);
   const [learningUrl, setLearningUrl] = useState('https://www.bilibili.com'); 
   const [dataSource, setDataSource] = useState<'DB' | 'STATIC'>('STATIC');
   const [connectionError, setConnectionError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-
-  // Dynamic Content State
   const [siteContent, setSiteContent] = useState<SiteContent>({
     brandName: { zh: '', en: '' },
     heroTitle: { zh: '', en: '' },
     heroSubtitle: { zh: '', en: '' }
   });
 
-  // --- Supabase Data Loading ---
   useEffect(() => {
     const fetchData = async () => {
-      // Templates
-      // 尝试获取数据
       const { data: dbTemplates, error: tError } = await supabase
         .from('templates')
         .select('*')
         .order('id', { ascending: false }); 
       
       if (tError) {
-        // --- 真正的连接错误 ---
         console.warn("Supabase connection failed:", (tError as any).message || tError);
         setConnectionError(true);
-        // 获取错误详情，方便排查
-        const msg = (tError as any).message || String(tError);
+        const msg = ((tError as any)?.message || String(tError)) as string;
         setErrorMessage(msg);
-        
-        // 只有报错时才降级到静态数据
         setTemplates(TEMPLATES); 
         setDataSource('STATIC');
       } else {
-        // --- 连接成功 ---
         setConnectionError(false);
         setErrorMessage('');
         setDataSource('DB');
 
         if (!dbTemplates || dbTemplates.length === 0) {
-          console.log("Database connected but empty.");
-          // 数据库为空时，显示空列表，而不是演示数据
           setTemplates([]); 
         } else {
-          console.log("Supabase Data Loaded:", dbTemplates.length, "items");
           setTemplates(dbTemplates.map(mapTemplateFromDB));
         }
       }
 
-      // Settings
       const { data: settings, error: sError } = await supabase.from('settings').select('*');
       if (!sError && settings) {
         const settingsArray = settings as { key: string; value: any }[];
@@ -148,7 +124,6 @@ const App: React.FC = () => {
         if (wx) setWechatId(String(wx.value));
         if (url) setLearningUrl(String(url.value));
 
-        // Load Dynamic Content
         const getContent = (key: string) => {
              const found = settingsArray.find((s) => s.key === key);
              return found ? String(found.value) : '';
@@ -173,18 +148,9 @@ const App: React.FC = () => {
 
     fetchData();
 
-    // Realtime
     const channels = supabase.channel('custom-all-channel')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'templates' },
-        () => { fetchData(); }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'settings' },
-        () => { fetchData(); }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'templates' }, () => { fetchData(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => { fetchData(); })
       .subscribe();
 
     return () => {
@@ -192,17 +158,15 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Theme Effect
   useEffect(() => {
     const root = document.documentElement;
     const config = THEME_CONFIG[theme];
     Object.entries(config).forEach(([key, value]) => {
-      root.style.setProperty(key, value);
+      root.style.setProperty(key, value as string);
     });
     localStorage.setItem('visionary_theme', theme);
   }, [theme]);
 
-  // Handlers
   const handleViewDetails = (template: VideoTemplate) => {
     setSelectedTemplate(template);
     setActiveSection(AppSection.TEMPLATES);
@@ -219,31 +183,27 @@ const App: React.FC = () => {
     setActiveSection(AppSection.HOME);
   };
 
-  // Admin Handlers
   const handleAddTemplate = async (t: VideoTemplate) => {
     const { error } = await supabase.from('templates').insert([mapTemplateToDB(t)] as any);
     if (error) {
-      const errMsg = (error as any)?.message || String(error);
+      const errMsg = ((error as any)?.message || String(error)) as string;
       alert("添加失败: " + errMsg);
-      console.error("Add failed", error);
     }
   };
 
   const handleUpdateTemplate = async (t: VideoTemplate) => {
     const { error } = await supabase.from('templates').update(mapTemplateToDB(t) as any).eq('id', t.id);
     if (error) {
-      const errMsg = (error as any)?.message || String(error);
+      const errMsg = ((error as any)?.message || String(error)) as string;
       alert("更新失败: " + errMsg);
-      console.error("Update failed", error);
     }
   };
 
   const handleDeleteTemplate = async (id: string) => {
     const { error } = await supabase.from('templates').delete().eq('id', id);
     if (error) {
-      const errMsg = (error as any)?.message || String(error);
+      const errMsg = ((error as any)?.message || String(error)) as string;
       alert("删除失败: " + errMsg);
-      console.error("Delete failed", error);
     }
   };
 
@@ -252,12 +212,8 @@ const App: React.FC = () => {
   };
   
   const handleUpdateSetting = async (key: string, value: string) => {
-     // Explicitly cast the object to any to bypass potential schema mismatch issues
      const { error } = await supabase.from('settings').upsert({ key, value } as any);
-     if (error) {
-       // Safely handle error for logging
-       console.error(`Setting ${key} failed`, (error as any)?.message || error);
-     }
+     if (error) console.error(`Setting ${key} failed`, ((error as any)?.message || String(error)) as string);
   };
 
   const handleUpdateSiteContent = async (content: SiteContent) => {
@@ -275,7 +231,6 @@ const App: React.FC = () => {
     setSiteContent(content);
   };
 
-  // Filter Logic
   const filteredTemplates = useMemo(() => {
     return templates.filter(t => {
       const matchesSearch = t.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -311,7 +266,7 @@ const App: React.FC = () => {
       {dataSource === 'DB' && (
         <span className="text-[10px] bg-green-500/20 text-green-600 px-2 py-1 rounded border border-green-500/30 font-mono flex items-center gap-1 w-fit">
           <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-          已连接数据库
+          已连接
         </span>
       )}
 
@@ -322,7 +277,7 @@ const App: React.FC = () => {
         }}
         className={`text-xs font-bold uppercase tracking-widest text-anime-text-muted hover:text-anime-text transition-colors ${mobile ? 'text-left py-2' : ''}`}
       >
-        {language === 'zh' ? 'Switch to English' : '切换中文'}
+        {language === 'zh' ? 'EN' : '中文'}
       </button>
       
       {!mobile && <div className="h-4 w-px bg-anime-text-muted/20"></div>}
@@ -334,7 +289,7 @@ const App: React.FC = () => {
         }}
         className={`text-xs font-bold uppercase tracking-widest text-anime-text-muted hover:text-anime-text transition-colors flex items-center gap-2 ${mobile ? 'text-left py-2' : ''}`}
       >
-        {theme === 'cyberpunk' ? '⚫ Cyberpunk' : '⚪ Anime'}
+        {theme === 'cyberpunk' ? 'Theme' : 'Theme'}
       </button>
       
       {!mobile && <div className="h-4 w-px bg-anime-text-muted/20"></div>}
@@ -394,19 +349,15 @@ const App: React.FC = () => {
         </header>
       )}
 
-      {/* Error Banner for Connection Issues */}
+      {/* Error Banner */}
       {connectionError && (
         <div className="bg-red-900/80 border-b border-red-500/50 text-white text-sm text-center py-4 font-bold tracking-wider animate-pulse px-4 backdrop-blur-sm">
            <div className="max-w-4xl mx-auto flex flex-col items-center gap-2">
              <div className="flex items-center gap-2 text-red-200">
-               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-               <span>数据库连接失败 (CONNECTION FAILED)</span>
+               <span>⚠️ 数据库连接失败</span>
              </div>
              <div className="bg-black/50 px-4 py-2 rounded font-mono text-xs text-red-300 border border-red-500/30">
-               错误详情: {errorMessage || 'Unknown Error'}
-             </div>
-             <div className="text-xs text-red-200/70 mt-1">
-               提示: 如果显示 "relation does not exist"，请在 Supabase 后台 SQL Editor 运行建表代码。
+               {errorMessage || 'Unknown Error'}
              </div>
            </div>
         </div>
@@ -438,24 +389,25 @@ const App: React.FC = () => {
             onSwitchTemplate={handleViewDetails}
           />
         ) : (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
-             <div className="mb-12 space-y-6">
-                <div className="text-center space-y-2">
-                   <h1 className="text-4xl md:text-6xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-anime-text via-anime-secondary to-anime-primary animate-pulse-slow">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 animate-fade-in">
+             {/* Hero Section */}
+             <div className="mb-12 md:mb-16 space-y-6 md:space-y-8">
+                <div className="text-center space-y-3 md:space-y-4">
+                   <h1 className="text-4xl md:text-6xl lg:text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-anime-text via-anime-secondary to-anime-primary animate-pulse-slow leading-tight">
                       {displayHeroTitle}
                    </h1>
-                   <p className="text-anime-text-muted max-w-2xl mx-auto font-medium">
+                   <p className="text-anime-text-muted max-w-2xl mx-auto font-medium text-sm md:text-base leading-relaxed px-4">
                      {displayHeroSubtitle}
                    </p>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-anime-card/50 p-4 rounded-2xl border border-anime-text-muted/10 backdrop-blur-sm shadow-sm">
+                <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-anime-card/50 p-4 rounded-2xl border border-anime-text-muted/10 backdrop-blur-sm shadow-sm max-w-4xl mx-auto">
                    <div className="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar mask-linear-fade">
                       {allTags.map(tag => (
                         <button
                           key={tag}
                           onClick={() => setActiveTag(tag)}
-                          className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border ${
+                          className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all border shrink-0 ${
                             activeTag === tag 
                               ? 'bg-anime-primary text-white border-anime-primary shadow-lg shadow-anime-primary/20' 
                               : 'bg-anime-card text-anime-text-muted border-anime-text-muted/20 hover:bg-anime-text-muted/10 hover:text-anime-text'
@@ -466,7 +418,7 @@ const App: React.FC = () => {
                       ))}
                    </div>
                    
-                   <div className="relative w-full md:w-64 group">
+                   <div className="relative w-full md:w-64 group shrink-0">
                       <input 
                         type="text" 
                         placeholder={t.app.searchPlaceholder}
@@ -480,7 +432,7 @@ const App: React.FC = () => {
              </div>
 
              {filteredTemplates.length > 0 ? (
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
                  {filteredTemplates.map(template => (
                    <TemplateCard 
                      key={template.id} 
@@ -496,7 +448,7 @@ const App: React.FC = () => {
                   <h3 className="text-xl font-bold text-anime-text mb-2">{t.app.noTemplatesTitle}</h3>
                   <p className="text-anime-text-muted">
                     {dataSource === 'DB' 
-                      ? "数据库为空 (No Data)。请进入后台管理添加模版。" 
+                      ? "数据库为空 (No Data)" 
                       : t.app.noTemplatesDescStatic}
                   </p>
                   <button 
