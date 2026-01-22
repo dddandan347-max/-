@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { VideoTemplate, ChatSession, ChatMessage, SiteContent } from '../types';
+import { VideoTemplate, ChatSession, ChatMessage, SiteContent, AdminUser } from '../types';
 import { supabase } from '../services/supabaseClient';
 import { useLanguage } from '../LanguageContext';
 
@@ -44,14 +44,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onBack 
 }) => {
   const { t } = useLanguage();
+  
+  // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginMode, setLoginMode] = useState<'login' | 'register'>('login');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // Admin Data State
+  const [usersList, setUsersList] = useState<AdminUser[]>([]);
   const [editingTemplate, setEditingTemplate] = useState<VideoTemplate | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'templates' | 'chat'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'chat' | 'users'>('templates');
   const [isImageUploading, setIsImageUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Pagination & Search State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   // Config State
   const [configUrl, setConfigUrl] = useState('');
@@ -81,11 +95,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [tagsInput, setTagsInput] = useState('');
 
-  // Auto-login
+  // Auto-login from session storage
   useEffect(() => {
-    const sessionAuth = sessionStorage.getItem('admin_auth');
-    if (sessionAuth === 'true') {
-      setIsAuthenticated(true);
+    const storedUser = sessionStorage.getItem('admin_user');
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        setIsAuthenticated(true);
+        setCurrentUser(parsedUser);
+      } catch (e) {
+        sessionStorage.removeItem('admin_user');
+      }
     }
   }, []);
 
@@ -95,6 +115,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setConfigWechatId(wechatId);
     setLocalSiteContent(siteContent);
   }, [learningUrl, wechatId, siteContent]);
+
+  // Fetch Logic for Master Admin
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.role === 'master' && activeTab === 'users') {
+      fetchUsers();
+    }
+  }, [isAuthenticated, currentUser, activeTab]);
+
+  const fetchUsers = async () => {
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (data) setUsersList(data as AdminUser[]);
+    if (error) console.error("Error fetching users", error);
+  };
 
   // Poll/Subscribe for chat sessions from Supabase
   useEffect(() => {
@@ -143,16 +180,161 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }, [sessions, activeTab, selectedSessionId]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  // ----------------------------------------------------------------
+  // Derived State for Pagination & Filtering
+  // ----------------------------------------------------------------
+  
+  const filteredTemplates = templates.filter(t => {
+    const term = searchTerm.toLowerCase();
+    return t.title.toLowerCase().includes(term) || 
+           t.tags.some(tag => tag.toLowerCase().includes(term)) ||
+           t.id.toLowerCase().includes(term);
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredTemplates.length / ITEMS_PER_PAGE));
+
+  // Reset to page 1 if search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Ensure currentPage is valid if data changes
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(1);
+  }, [totalPages, currentPage]);
+
+  const currentTemplates = filteredTemplates.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // ----------------------------------------------------------------
+  // Auth Functions
+  // ----------------------------------------------------------------
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === '4066') {
-      setIsAuthenticated(true);
-      sessionStorage.setItem('admin_auth', 'true');
-      setError('');
-    } else {
-      setError(t.admin.errorPass);
+    setAuthError('');
+    setAuthLoading(true);
+
+    const isMasterCreds = username === '短短' && password === '4066';
+
+    try {
+      if (loginMode === 'login') {
+        // 1. Check if it's the master hardcode first
+        if (isMasterCreds) {
+           // Check if master exists in DB, if not create it
+           const { data: existingMaster } = await supabase
+             .from('admin_users')
+             .select('*')
+             .eq('username', '短短')
+             .single();
+           
+           if (!existingMaster) {
+             // Bootstrap Master Account
+             const newMaster: Partial<AdminUser> = {
+               username: '短短',
+               password: '4066',
+               role: 'master',
+               is_approved: true
+             };
+             await supabase.from('admin_users').insert([newMaster]);
+           }
+        }
+
+        // 2. Perform DB Login Check
+        const { data: user, error } = await supabase
+          .from('admin_users')
+          .select('*')
+          .eq('username', username)
+          .eq('password', password)
+          .single();
+
+        if (error || !user) {
+          throw new Error('用户名或密码错误 / Invalid credentials');
+        }
+
+        if (!user.is_approved) {
+           throw new Error('账号待审核，请联系管理员 (短短) / Account pending approval');
+        }
+
+        // Login Success
+        const adminUser = user as AdminUser;
+        setCurrentUser(adminUser);
+        setIsAuthenticated(true);
+        sessionStorage.setItem('admin_user', JSON.stringify(adminUser));
+      } else {
+        // Register Mode
+        if (isMasterCreds) {
+           throw new Error('系统保留账号，请直接登录');
+        }
+
+        // Check if user exists
+        const { data: existing } = await supabase
+          .from('admin_users')
+          .select('id')
+          .eq('username', username)
+          .single();
+        
+        if (existing) {
+          throw new Error('用户名已存在 / Username taken');
+        }
+
+        const newUser = {
+           username,
+           password,
+           role: 'sub',
+           is_approved: false
+        };
+
+        const { error: createError } = await supabase.from('admin_users').insert([newUser]);
+        if (createError) throw createError;
+
+        setAuthError('');
+        alert('注册成功！请等待管理员（短短）审核后登录。');
+        setLoginMode('login');
+      }
+    } catch (err: any) {
+      setAuthError(err.message || '操作失败');
+    } finally {
+      setAuthLoading(false);
     }
   };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    sessionStorage.removeItem('admin_user');
+  };
+
+  // ----------------------------------------------------------------
+  // User Management Functions
+  // ----------------------------------------------------------------
+  const toggleUserApproval = async (user: AdminUser) => {
+    if (user.username === '短短') return; // Protect master
+
+    const newStatus = !user.is_approved;
+    const { error } = await supabase
+      .from('admin_users')
+      .update({ is_approved: newStatus })
+      .eq('id', user.id);
+    
+    if (!error) {
+       fetchUsers();
+    }
+  };
+
+  const handleDeleteUser = async (id: string, name: string) => {
+    if (name === '短短') return;
+    if (!window.confirm(`确认删除用户 ${name}?`)) return;
+
+    const { error } = await supabase.from('admin_users').delete().eq('id', id);
+    if (!error) {
+      fetchUsers();
+    }
+  };
+
+  // ----------------------------------------------------------------
 
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -294,18 +476,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     alert('配置已保存 / Configuration Saved');
   };
 
-  const moveUp = (index: number) => {
-    if (index === 0) return;
-    const newTemplates = [...templates];
-    [newTemplates[index - 1], newTemplates[index]] = [newTemplates[index], newTemplates[index - 1]];
-    onReorder(newTemplates);
+  // Reorder using global IDs instead of visual index
+  const handleMoveUp = (id: string) => {
+    const index = templates.findIndex(t => t.id === id);
+    if (index > 0) {
+      const newTemplates = [...templates];
+      [newTemplates[index - 1], newTemplates[index]] = [newTemplates[index], newTemplates[index - 1]];
+      onReorder(newTemplates);
+    }
   };
 
-  const moveDown = (index: number) => {
-    if (index === templates.length - 1) return;
-    const newTemplates = [...templates];
-    [newTemplates[index + 1], newTemplates[index]] = [newTemplates[index], newTemplates[index + 1]];
-    onReorder(newTemplates);
+  const handleMoveDown = (id: string) => {
+    const index = templates.findIndex(t => t.id === id);
+    if (index < templates.length - 1) {
+      const newTemplates = [...templates];
+      [newTemplates[index + 1], newTemplates[index]] = [newTemplates[index], newTemplates[index + 1]];
+      onReorder(newTemplates);
+    }
   };
 
   if (!isAuthenticated) {
@@ -320,31 +507,62 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="text-anime-secondary font-mono text-xs mb-2 tracking-[0.5em]">{t.admin.systemLogin}</div>
               <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter"><span className="text-anime-primary">{t.admin.terminal}</span></h2>
             </div>
-            <form onSubmit={handleLogin} className="space-y-6">
+            
+            <form onSubmit={handleAuthSubmit} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-bold text-anime-secondary uppercase mb-2 tracking-widest font-mono">{t.admin.passkey}</label>
+                <label className="block text-[10px] font-bold text-anime-secondary uppercase mb-2 tracking-widest font-mono">USERNAME</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-black border border-slate-700 p-4 text-white focus:border-anime-primary focus:ring-1 focus:ring-anime-primary outline-none transition-all font-mono text-center text-lg tracking-wider"
+                  placeholder="请输入用户名"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-anime-secondary uppercase mb-2 tracking-widest font-mono">PASSWORD</label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-black border border-slate-700 p-4 text-white focus:border-anime-primary focus:ring-1 focus:ring-anime-primary outline-none transition-all font-mono text-center tracking-[0.5em] text-xl text-anime-primary"
+                  className="w-full bg-black border border-slate-700 p-4 text-white focus:border-anime-primary focus:ring-1 focus:ring-anime-primary outline-none transition-all font-mono text-center tracking-[0.5em] text-xl"
                   placeholder="••••"
                 />
               </div>
-              {error && <div className="text-red-500 text-xs font-mono border border-red-500/30 bg-red-500/10 p-2 text-center blinking-cursor">&gt;&gt; {error}</div>}
+
+              {authError && <div className="text-red-500 text-xs font-mono border border-red-500/30 bg-red-500/10 p-2 text-center blinking-cursor">&gt;&gt; {authError}</div>}
+              
               <button
                 type="submit"
-                className="w-full bg-white text-black font-black uppercase tracking-widest py-4 hover:bg-anime-primary hover:text-white transition-all skew-x-[-10deg]"
+                disabled={authLoading}
+                className="w-full bg-white text-black font-black uppercase tracking-widest py-4 hover:bg-anime-primary hover:text-white transition-all skew-x-[-10deg] disabled:opacity-50"
               >
-                <div className="skew-x-[10deg]">{t.admin.verify}</div>
+                <div className="skew-x-[10deg]">
+                   {authLoading ? 'PROCESSING...' : (loginMode === 'login' ? t.admin.verify : 'REGISTER')}
+                </div>
               </button>
-              <button
-                type="button"
-                onClick={onBack}
-                className="w-full text-slate-500 hover:text-white text-xs py-2 uppercase tracking-widest font-mono hover:underline"
-              >
-                {t.admin.exit}
-              </button>
+
+              <div className="flex justify-between items-center mt-4">
+                 <button
+                    type="button"
+                    onClick={onBack}
+                    className="text-slate-500 hover:text-white text-xs uppercase tracking-widest font-mono hover:underline"
+                 >
+                    {t.admin.exit}
+                 </button>
+                 <button
+                    type="button"
+                    onClick={() => {
+                        setLoginMode(loginMode === 'login' ? 'register' : 'login');
+                        setAuthError('');
+                        setUsername('');
+                        setPassword('');
+                    }}
+                    className="text-anime-secondary hover:text-white text-xs uppercase tracking-widest font-mono hover:underline"
+                 >
+                    {loginMode === 'login' ? '>> REGISTER NEW ACCOUNT' : '>> BACK TO LOGIN'}
+                 </button>
+              </div>
             </form>
           </div>
         </div>
@@ -498,10 +716,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
              <span className="text-[10px] font-mono text-green-500 uppercase tracking-widest">{t.admin.systemOnline}</span>
           </div>
           <h2 className="text-4xl font-black text-white tracking-tighter italic">{t.admin.panelTitle}</h2>
+          <div className="mt-2 text-xs text-anime-secondary font-mono">
+             LOGGED IN AS: <span className="font-bold uppercase text-white">{currentUser?.username}</span> 
+             {currentUser?.role === 'master' && <span className="ml-2 bg-anime-primary text-white px-1 rounded text-[9px]">MASTER</span>}
+          </div>
         </div>
         <div className="flex gap-4">
            <button
-            onClick={onBack}
+            onClick={handleLogout}
             className="px-6 py-2 text-slate-500 hover:text-white transition-colors font-mono text-xs border border-transparent hover:border-slate-500 uppercase tracking-widest"
           >
             {t.admin.logout}
@@ -536,6 +758,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </span>
           )}
         </button>
+        {currentUser?.role === 'master' && (
+           <button 
+             onClick={() => setActiveTab('users')}
+             className={`flex-1 py-3 px-6 text-sm font-bold uppercase tracking-widest transition-all border ${
+               activeTab === 'users' 
+                 ? 'bg-anime-accent text-white border-anime-accent' 
+                 : 'bg-slate-900 text-slate-500 border-slate-700 hover:border-slate-500'
+             }`}
+           >
+             USERS (审核)
+           </button>
+        )}
       </div>
 
       {/* Content Area */}
@@ -638,7 +872,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
 
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-between items-center mb-4">
+             {/* Search Bar */}
+             <div className="relative max-w-md w-full">
+                <input 
+                  type="text" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="搜索模版标题或标签..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-full py-2 pl-10 pr-4 text-white text-sm focus:border-anime-secondary outline-none shadow-sm"
+                />
+                <svg className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+             </div>
+
             <button
               onClick={handleStartCreate}
               className="bg-anime-secondary text-black hover:bg-white px-6 py-2 font-bold uppercase tracking-wider flex items-center gap-2 shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all skew-x-[-10deg]"
@@ -649,24 +895,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </button>
           </div>
 
+          {/* Template List */}
           <div className="grid gap-4">
-            {templates.map((template, index) => (
+            {currentTemplates.map((template) => {
+              // Find index in ORIGINAL list for sorting
+              const globalIndex = templates.findIndex(t => t.id === template.id);
+              
+              return (
               <div key={template.id} className="bg-slate-900 border border-slate-700 p-4 flex flex-col sm:flex-row items-center gap-6 hover:border-anime-primary transition-all group relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-2 opacity-5 font-black text-6xl text-white select-none pointer-events-none group-hover:opacity-10 transition-opacity">DATA</div>
                 
                 {/* Sort Controls */}
                 <div className="flex flex-col gap-1 z-10">
                   <button 
-                    onClick={() => moveUp(index)}
-                    disabled={index === 0}
+                    onClick={() => handleMoveUp(template.id)}
+                    disabled={globalIndex === 0}
                     className="p-1 text-slate-500 hover:text-anime-secondary disabled:opacity-30 disabled:hover:text-slate-500 transition-colors bg-slate-800 rounded-sm"
                     title={t.admin.moveUp}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
                   </button>
                   <button 
-                    onClick={() => moveDown(index)}
-                    disabled={index === templates.length - 1}
+                    onClick={() => handleMoveDown(template.id)}
+                    disabled={globalIndex === templates.length - 1}
                     className="p-1 text-slate-500 hover:text-anime-secondary disabled:opacity-30 disabled:hover:text-slate-500 transition-colors bg-slate-800 rounded-sm"
                     title={t.admin.moveDown}
                   >
@@ -676,7 +927,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                 <div className="relative w-32 h-20 flex-shrink-0 border border-slate-600 group-hover:border-anime-secondary transition-colors">
                    <img src={template.imageUrl} alt={template.title} className="w-full h-full object-cover" />
-                   <div className="absolute top-0 left-0 bg-anime-secondary text-black text-[9px] font-bold px-1 font-mono">ID: {template.id}</div>
+                   <div className="absolute top-0 left-0 bg-anime-secondary text-black text-[9px] font-bold px-1 font-mono">ID: {template.id.slice(0, 4)}...</div>
                 </div>
                 
                 <div className="flex-1 text-center sm:text-left min-w-0 z-10">
@@ -708,9 +959,98 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+             <div className="flex justify-center items-center gap-4 mt-8 bg-slate-900/50 p-4 rounded-lg border border-slate-800">
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 bg-slate-800 text-white rounded text-xs font-bold uppercase tracking-wider hover:bg-anime-primary disabled:opacity-50 disabled:hover:bg-slate-800 transition-colors"
+                >
+                  Prev
+                </button>
+                <div className="text-white font-mono text-xs">
+                   PAGE <span className="text-anime-secondary font-bold text-lg mx-1">{currentPage}</span> / {totalPages}
+                </div>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 bg-slate-800 text-white rounded text-xs font-bold uppercase tracking-wider hover:bg-anime-primary disabled:opacity-50 disabled:hover:bg-slate-800 transition-colors"
+                >
+                  Next
+                </button>
+             </div>
+          )}
         </>
+      ) : activeTab === 'users' ? (
+        /* User Management Tab */
+        <div className="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden animate-fade-in">
+           <div className="p-4 border-b border-slate-700 bg-black/20 flex justify-between items-center">
+              <h3 className="font-bold text-white text-lg">管理员账号审核 ({usersList.length})</h3>
+              <button onClick={fetchUsers} className="text-xs text-anime-secondary hover:underline">刷新列表</button>
+           </div>
+           
+           <div className="overflow-x-auto">
+             <table className="w-full text-left">
+               <thead className="bg-black/40 text-xs uppercase text-slate-500 font-mono tracking-wider">
+                 <tr>
+                   <th className="p-4">Username</th>
+                   <th className="p-4">Role</th>
+                   <th className="p-4">Status</th>
+                   <th className="p-4">Created</th>
+                   <th className="p-4 text-right">Action</th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-slate-800">
+                 {usersList.map(user => (
+                   <tr key={user.id} className="hover:bg-white/5 transition-colors">
+                     <td className="p-4 font-bold text-white">{user.username}</td>
+                     <td className="p-4">
+                        {user.role === 'master' ? (
+                          <span className="bg-anime-primary text-white text-[10px] px-2 py-1 rounded font-bold">MASTER</span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">SUB-ACCOUNT</span>
+                        )}
+                     </td>
+                     <td className="p-4">
+                       {user.is_approved ? (
+                         <span className="text-green-500 text-xs font-bold flex items-center gap-1">
+                           <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> APPROVED
+                         </span>
+                       ) : (
+                         <span className="text-yellow-500 text-xs font-bold flex items-center gap-1">
+                           <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span> PENDING
+                         </span>
+                       )}
+                     </td>
+                     <td className="p-4 text-slate-500 text-xs font-mono">{new Date(user.created_at).toLocaleDateString()}</td>
+                     <td className="p-4 text-right">
+                       {user.role !== 'master' && (
+                         <div className="flex justify-end gap-2">
+                            <button 
+                              onClick={() => toggleUserApproval(user)}
+                              className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors ${user.is_approved ? 'bg-slate-800 text-slate-300 hover:bg-yellow-900/30 hover:text-yellow-500' : 'bg-green-600 text-white hover:bg-green-500'}`}
+                            >
+                              {user.is_approved ? 'Suspend' : 'Approve'}
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteUser(user.id, user.username)}
+                              className="px-3 py-1 bg-red-900/20 text-red-500 hover:bg-red-600 hover:text-white rounded text-[10px] font-bold uppercase transition-colors"
+                            >
+                              Delete
+                            </button>
+                         </div>
+                       )}
+                     </td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+           </div>
+        </div>
       ) : (
         /* Chat Console */
         <div className="flex h-[600px] border border-slate-700 bg-slate-900 rounded-lg overflow-hidden animate-fade-in">

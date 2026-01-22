@@ -33,6 +33,15 @@ export interface SiteContent {
   heroSubtitle: { zh: string; en: string };
 }
 
+export interface AdminUser {
+  id: string;
+  username: string;
+  password?: string; // Stored simply for this specific requirement
+  role: 'master' | 'sub';
+  is_approved: boolean;
+  created_at: string;
+}
+
 export enum AppSection {
   HOME = 'home',
   TEMPLATES = 'templates',
