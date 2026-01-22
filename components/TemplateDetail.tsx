@@ -33,17 +33,67 @@ export const TemplateDetail: React.FC<TemplateDetailProps> = ({
       .slice(0, 3);
   }, [template, allTemplates]);
 
-  const renderVideoPlayer = (url: string, poster: string) => {
-    if (!url) return null;
+  const renderVideoPlayer = (rawInput: string, poster: string) => {
+    if (!rawInput) return null;
 
-    const trimmedUrl = url.trim();
+    const trimmedInput = rawInput.trim();
 
     // 1. Raw HTML Embed Code (Iframe/Embed tags)
-    if (trimmedUrl.startsWith('<iframe') || trimmedUrl.startsWith('<embed')) {
-      return <div className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>embed]:w-full [&>embed]:h-full" dangerouslySetInnerHTML={{ __html: trimmedUrl }} />;
+    // 如果用户粘贴的是 <iframe ...> 代码，直接渲染
+    if (trimmedInput.startsWith('<iframe') || trimmedInput.startsWith('<embed')) {
+      return (
+        <div 
+          className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>embed]:w-full [&>embed]:h-full bg-black" 
+          dangerouslySetInnerHTML={{ __html: trimmedInput }} 
+        />
+      );
     }
 
-    // 2. Bilibili (Handle BV IDs)
+    // 2. Clean URL Extraction
+    // 从 "9.10 复制打开抖音... https://..." 中提取纯 URL
+    const urlMatch = trimmedInput.match(/https?:\/\/[^\s"']+/);
+    const url = urlMatch ? urlMatch[0] : trimmedInput;
+
+    // 3. Douyin (TikTok China) Handling
+    if (url.includes('douyin.com')) {
+       // 检测是否是短链接 (v.douyin.com) - 短链接在 iframe 中通常会被浏览器拦截 (302 Redirect blocked)
+       if (url.includes('v.douyin.com')) {
+          return (
+             <div className="w-full h-full bg-black flex flex-col items-center justify-center p-8 text-center space-y-4">
+                 <p className="text-white font-bold">无法直接播放短链接 (v.douyin.com)</p>
+                 <p className="text-sm text-slate-400">
+                    请使用电脑版链接 (www.douyin.com/video/...) <br/> 
+                    或在分享菜单中选择 "嵌入代码" 粘贴。
+                 </p>
+                 <a href={url} target="_blank" rel="noreferrer" className="px-4 py-2 bg-anime-primary text-white rounded font-bold text-sm">
+                    在新窗口打开
+                 </a>
+             </div>
+          );
+       }
+
+       // 尝试从长链接中提取视频 ID
+       // 格式通常为: https://www.douyin.com/video/7325666276707372453
+       const videoIdMatch = url.match(/video\/(\d+)/) || url.match(/modal_id=(\d+)/);
+       if (videoIdMatch) {
+         const videoId = videoIdMatch[1];
+         // 使用抖音官方播放器接口
+         const embedUrl = `https://www.douyin.com/player/video/${videoId}?autoplay=0&theme=0`;
+         return (
+           <iframe 
+             src={embedUrl} 
+             className="w-full h-full bg-black" 
+             scrolling="no" 
+             frameBorder="0" 
+             allowFullScreen 
+             referrerPolicy="no-referrer" // 关键：防止防盗链策略
+             sandbox="allow-top-navigation allow-same-origin allow-forms allow-scripts"
+           />
+         );
+       }
+    }
+
+    // 4. Bilibili (Handle BV IDs)
     if (url.includes('bilibili.com')) {
        const bvidMatch = url.match(/BV[a-zA-Z0-9]+/);
        if (bvidMatch) {
@@ -55,13 +105,14 @@ export const TemplateDetail: React.FC<TemplateDetailProps> = ({
              scrolling="no" 
              frameBorder="0" 
              allowFullScreen 
+             referrerPolicy="no-referrer"
              sandbox="allow-top-navigation allow-same-origin allow-forms allow-scripts"
            />
          );
        }
     }
     
-    // 3. YouTube
+    // 5. YouTube
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
         let embedUrl = url;
         if (url.includes('watch?v=')) {
@@ -84,7 +135,7 @@ export const TemplateDetail: React.FC<TemplateDetailProps> = ({
         );
     }
 
-    // 4. Direct Video File Extensions
+    // 6. Direct Video File Extensions
     const isVideoFile = (link: string) => {
         const clean = link.split('?')[0].toLowerCase();
         return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.ogg') || clean.endsWith('.mov');
@@ -104,14 +155,14 @@ export const TemplateDetail: React.FC<TemplateDetailProps> = ({
         );
     }
 
-    // 5. Fallback: Generic Iframe (For Douyin, Kuaishou, etc.)
-    // Assuming the user pasted a link that works in an iframe (e.g. player url)
+    // 7. Fallback: Generic Iframe (For Kuaishou, etc.)
     return (
       <iframe 
         src={url}
         className="w-full h-full bg-black"
         frameBorder="0"
         allowFullScreen
+        referrerPolicy="no-referrer" // 尝试绕过部分简单的 Referer 检查
       />
     );
   };
