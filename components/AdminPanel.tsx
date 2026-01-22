@@ -50,6 +50,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [editingTemplate, setEditingTemplate] = useState<VideoTemplate | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [activeTab, setActiveTab] = useState<'templates' | 'chat'>('templates');
+  const [isImageUploading, setIsImageUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Config State
   const [configUrl, setConfigUrl] = useState('');
@@ -236,6 +238,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setIsCreating(true);
   };
 
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setIsImageUploading(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `cover_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('template-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('template-images')
+        .getPublicUrl(filePath);
+
+      setFormData(prev => ({ ...prev, imageUrl: publicUrl }));
+    } catch (error: any) {
+      console.error('Upload failed:', error);
+      alert('图片上传失败: ' + error.message);
+    } finally {
+      setIsImageUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -372,13 +406,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                  <div className="group">
                    <label className="block text-[10px] font-bold text-anime-secondary uppercase mb-2 tracking-widest font-mono">{t.admin.imageUrl}</label>
-                   <input
-                     type="text"
-                     required
-                     value={formData.imageUrl}
-                     onChange={e => setFormData({...formData, imageUrl: e.target.value})}
-                     className="w-full bg-black border border-slate-700 p-3 text-white focus:border-anime-secondary outline-none transition-colors font-mono text-xs"
-                   />
+                   <div className="flex gap-2">
+                     <input
+                       type="text"
+                       required
+                       value={formData.imageUrl}
+                       onChange={e => setFormData({...formData, imageUrl: e.target.value})}
+                       className="flex-1 bg-black border border-slate-700 p-3 text-white focus:border-anime-secondary outline-none transition-colors font-mono text-xs"
+                       placeholder="https://..."
+                     />
+                     <input 
+                        type="file" 
+                        ref={fileInputRef}
+                        onChange={handleCoverUpload}
+                        accept="image/*"
+                        className="hidden"
+                     />
+                     <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isImageUploading}
+                        className="px-4 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-600 rounded flex items-center justify-center min-w-[80px]"
+                     >
+                        {isImageUploading ? (
+                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                        ) : (
+                          '上传'
+                        )}
+                     </button>
+                   </div>
+                   {formData.imageUrl && (
+                      <div className="mt-2 relative w-full h-32 bg-black border border-slate-800 rounded overflow-hidden group/preview">
+                         <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover opacity-70 group-hover/preview:opacity-100 transition-opacity" />
+                         <span className="absolute bottom-1 right-2 text-[10px] text-white bg-black/50 px-1">PREVIEW</span>
+                      </div>
+                   )}
                  </div>
                  <div className="group">
                    <label className="block text-[10px] font-bold text-anime-secondary uppercase mb-2 tracking-widest font-mono">{t.admin.videoUrl}</label>
