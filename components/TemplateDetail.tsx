@@ -34,11 +34,17 @@ export const TemplateDetail: React.FC<TemplateDetailProps> = ({
   }, [template, allTemplates]);
 
   const renderVideoPlayer = (url: string, poster: string) => {
-    if (url.trim().startsWith('<iframe')) {
-      return <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: url }} />;
+    if (!url) return null;
+
+    const trimmedUrl = url.trim();
+
+    // 1. Raw HTML Embed Code (Iframe/Embed tags)
+    if (trimmedUrl.startsWith('<iframe') || trimmedUrl.startsWith('<embed')) {
+      return <div className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>embed]:w-full [&>embed]:h-full" dangerouslySetInnerHTML={{ __html: trimmedUrl }} />;
     }
 
-    if (url.includes('bilibili.com/video/')) {
+    // 2. Bilibili (Handle BV IDs)
+    if (url.includes('bilibili.com')) {
        const bvidMatch = url.match(/BV[a-zA-Z0-9]+/);
        if (bvidMatch) {
          const embedUrl = `//player.bilibili.com/player.html?bvid=${bvidMatch[0]}&page=1&high_quality=1&danmaku=0`;
@@ -49,17 +55,22 @@ export const TemplateDetail: React.FC<TemplateDetailProps> = ({
              scrolling="no" 
              frameBorder="0" 
              allowFullScreen 
+             sandbox="allow-top-navigation allow-same-origin allow-forms allow-scripts"
            />
          );
        }
     }
     
+    // 3. YouTube
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
         let embedUrl = url;
         if (url.includes('watch?v=')) {
             embedUrl = url.replace('watch?v=', 'embed/');
+            const id = embedUrl.split('embed/')[1].split('&')[0];
+            embedUrl = `https://www.youtube.com/embed/${id}`;
         } else if (url.includes('youtu.be/')) {
-            embedUrl = url.replace('youtu.be/', 'youtube.com/embed/');
+            const id = url.split('youtu.be/')[1].split('?')[0];
+            embedUrl = `https://www.youtube.com/embed/${id}`;
         }
         return (
            <iframe 
@@ -73,16 +84,35 @@ export const TemplateDetail: React.FC<TemplateDetailProps> = ({
         );
     }
 
+    // 4. Direct Video File Extensions
+    const isVideoFile = (link: string) => {
+        const clean = link.split('?')[0].toLowerCase();
+        return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.ogg') || clean.endsWith('.mov');
+    };
+
+    if (isVideoFile(url)) {
+        return (
+          <video 
+            src={url}
+            poster={poster}
+            controls
+            autoPlay
+            className="w-full h-full object-contain bg-black"
+          >
+            {t.card.browserNoSupport}
+          </video>
+        );
+    }
+
+    // 5. Fallback: Generic Iframe (For Douyin, Kuaishou, etc.)
+    // Assuming the user pasted a link that works in an iframe (e.g. player url)
     return (
-      <video 
+      <iframe 
         src={url}
-        poster={poster}
-        controls
-        autoPlay
-        className="w-full h-full object-contain bg-black"
-      >
-        {t.card.browserNoSupport}
-      </video>
+        className="w-full h-full bg-black"
+        frameBorder="0"
+        allowFullScreen
+      />
     );
   };
 

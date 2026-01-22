@@ -448,7 +448,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                      type="text"
                      value={formData.videoUrl || ''}
                      onChange={e => setFormData({...formData, videoUrl: e.target.value})}
-                     placeholder="支持 MP4直链 / Bilibili / YouTube 链接"
+                     placeholder={t.admin.videoUrlPlaceholder}
                      className="w-full bg-black border border-slate-700 p-3 text-white focus:border-anime-secondary outline-none transition-colors font-mono text-xs"
                    />
                    <p className="text-[9px] text-slate-500 mt-1">{t.admin.videoUrlHint}</p>
