@@ -6,10 +6,10 @@ import { VideoTemplate } from '../types';
 // ==========================================
 
 // 您的 Supabase 项目 URL
-const SUPABASE_URL = 'https://jzjhnnqopldqwauuhttm.supabase.co';
+const SUPABASE_URL = 'https://jwtiagpzrfpifkpsljec.supabase.co';
 
 // 您的 Supabase Anon Key
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6amhubnFvcGxkcXdhdXVodHRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0MDYwNzUsImV4cCI6MjA4Mzk4MjA3NX0.NvMm8QMCKJP0RoF0FYbQERCs8q8X6-jUjMdJcOIQ3e4';
+const SUPABASE_KEY = 'sb_publishable_vQM4QmpEz-IgaQsL-3RUTw_nVEL9O2X';
 
 // ==========================================
 
@@ -17,7 +17,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 export const isConfigured = 
   SUPABASE_URL.startsWith('https://') && 
   !SUPABASE_URL.includes('请在这里填入') &&
-  SUPABASE_KEY.startsWith('ey');
+  (SUPABASE_KEY.startsWith('ey') || SUPABASE_KEY.startsWith('sb_')); // Updated check to allow new key format if applicable
 
 // 创建客户端
 export const supabase = createClient(
